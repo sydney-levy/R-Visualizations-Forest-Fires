@@ -1,0 +1,192 @@
+---
+title: "California Wildfires"
+author: 'By: Brooke Coneeny and Sydney Levy'
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    css: [tamu, tamu-fonts]
+    nature:
+      highlightStyle: github
+      countIncrementalSlides: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(ggthemes)
+library(leaflet)
+library(ggmap)
+library(gganimate)
+library(png)
+library(gifski)
+library(glue)
+library(gridExtra)
+
+final_project_theme = theme_fivethirtyeight() + 
+  theme(text = element_text(family = "serif", size = 12),
+        axis.title = element_text(),
+        plot.title.position = "plot")
+```
+
+```{r load-data, echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+fires <- read_csv("CaliforniaFires.csv")
+```
+
+## Context
+* 2020 was one of the worst wildfire seasons in California's History
+* Wildfires created dangerous living conditinos for many California residents
+```{r, echo = FALSE, out.width = '90%'}
+knitr::include_graphics("IntroFire.jpg")
+```
+
+---
+## What we will explore: 
+* Geography of the fires 
+* Firefighting Resources
+* Impact of Fire Duration
+* Injuries caused by the fires
+```{r, echo = FALSE, out.width = '80%', fig.align = "center"}
+knitr::include_graphics("ExploreFire.jpg")
+```
+
+---
+## About our Dataset: 
+* Dataset contains records for wildfires from 2013-2019
+* Data taken from Kaggle.com
+* Original dataset contained over 1,600 wildfires
+  * We narrowed it down to 171 wildfires by selecting only the fires that 
+    had data for number of crews involved to fight the fire
+    
+```{r, echo = FALSE, fig.align = "center", out.width = '70%'}
+knitr::include_graphics("DataFire.jpg")
+```
+---
+## What can we learn from geographical trends?
+* Larger fires in northern California
+* Cluster of fires around Los Angeles
+* Diagonal line of fires through middle of the state
+```{r map of wildfires, out.width = '65%', fig.align = "center", echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+# Map of Wildfires
+ca <- c(left = -129, bottom = 32, right = -114, top = 42.3) 
+map <- get_stamenmap(ca, zoom = 5, maptype = "toner-lite") 
+
+ggmap(map) +
+  geom_point(data = fires, aes(x = Longitude, y = Latitude, size = AcresBurned), 
+             alpha = 0.5, color = "orange red") +
+  labs(
+    title = "Locations of California Wildfires",
+    size = "Acres Burned (in thousands)") +
+  scale_size_area(
+             breaks = 1000 * c(5, 10, 50, 100, 150, 200),
+             labels = c("5", "10","50", "100","150","200"))+
+  theme_void() +
+  theme(text = element_text(family = "serif"))
+
+fires_sorted_acres_burned <- fires[order(fires$AcresBurned),]
+```
+---
+## Geographical Points of Interest
+```{r map number two, fig.align = "center", echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+ca_leaflet_map = leaflet() %>% 
+  setView(lat = 37.978259, lng = -119.417931, zoom = 5.5) %>%
+  addTiles() %>%
+  addMarkers(lat = 39.81340, lng =-121.4347	, popup = "Camp Fire (2018)") %>% 
+  addMarkers(lat = 40.65428, lng =-122.6236	, popup = "Carr Fire (2018)")%>% 
+  addMarkers(lat = 37.8651, lng =-119.5383	, popup = "Yosemite National Park") %>% 
+  addMarkers(lat = 38.7949, lng =-120.3055	, popup = "El Dorado National Forest")%>% 
+  addMarkers(lat = 38.2353, lng =-120.0036	, popup = "Stanislaus National Forest")%>% 
+  addMarkers(lat = 37.3427, lng =-119.2244	, popup = "Sierra National Forest")%>% 
+  addMarkers(lat = 36.4864, lng =-118.5658	, popup = "Sequoia National Park")
+
+ca_leaflet_map
+```
+---
+## How are firefighting resources utilized within California? 
+
+```{r crews involved scatterplot, fig.align = "center", echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+#Acres Burned v. Crews Involved Scatterplot
+p0 <- ggplot(data = fires, aes(x = log10(AcresBurned), y = CrewsInvolved))+
+  geom_point(aes(text = AcresBurned))+
+  geom_smooth(method = "loess", se = FALSE) +
+  final_project_theme+
+  labs(
+    title = "Crews Involved v. Log of Acres Burned", 
+    x = "Log of Acres Burned",
+    y = "Crews Involved"
+  ) 
+
+ggplotly(p0, tooltip = "text")
+```
+---
+## How does the duration of the fires change year-to-year? 
+
+``` {r fire duration boxplot, out.width = '70%', fig.align = "center", echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+#Calculating Fire Duration & Creating Boxplot
+fires$fire_duration = difftime(fires$Extinguished,fires$Started,units='days')
+
+p <- ggplot(data = fires, aes(x = as.factor(ArchiveYear), group = ArchiveYear, y = fire_duration)) + 
+  geom_boxplot(aes(fill = as.factor(ArchiveYear), alpha = 0.3)) +
+  geom_jitter(aes(color = as.factor(ArchiveYear), text = AcresBurned)) +
+  theme_minimal() +
+  labs(
+    title = "Calfornia Wildfire Duration by Year",
+    x = "",
+    y = "Fire Duration (in days)") +
+  final_project_theme +
+  theme(
+    legend.position = "none"
+) 
+
+ggplotly(p, tooltip = "text")
+```
+---
+## How does the number of crews involved with the fires change year-to-year?
+
+```{r gganimate, out.width = '55%', fig.align = "center", echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+anim1 = ggplot(data = fires, aes(x = fire_duration, y = CrewsInvolved)) +
+  geom_point(aes(color = as.factor(ArchiveYear)))+
+  final_project_theme +
+  labs(x = "Fire Duration (in days)", y = "Crews Involved", col = "Year")+
+  theme(legend.position = "right",
+        legend.direction='vertical') +
+  transition_states(as.factor(ArchiveYear), transition_length = 5,
+                    state_length = 10) +
+  enter_fade() +
+  exit_shrink() +
+  ggtitle("Crews Involved v. Fire Duration by Year",
+          subtitle = "Now showing {closest_state}")
+
+animate(anim1, nframes = 100, duration = 21)
+```
+---
+## What do the changes in the number of injuries, personnel involved, and structures damaged tell us about California wildfires?
+
+```{r barchart grid, out.width = '70%', fig.align = "center", fig.width = 10, echo=FALSE, warning = FALSE, message = FALSE, comment = NA}
+b1 <- ggplot(fires, aes(x = Injuries, y = as.factor(-ArchiveYear))) + 
+  geom_col(aes(fill = as.factor(ArchiveYear)))+
+  final_project_theme +
+  theme(legend.position = "none") +
+  labs(y = "", x = "Injuries") +
+  scale_fill_brewer(palette = "YlOrRd")
+  
+
+b2 <- ggplot(fires, aes(x = StructuresDamaged, y = as.factor(-ArchiveYear))) + 
+   geom_col(aes(fill = as.factor(ArchiveYear)))+
+  final_project_theme + 
+  theme(legend.position = "none") +
+  labs(y = "", x = "Structures Damaged") +
+  scale_fill_brewer(palette = "YlOrRd")
+
+
+b3 <- ggplot(fires, aes(x = PersonnelInvolved, y = (as.factor(-ArchiveYear)))) + 
+   geom_col(aes(fill = as.factor(ArchiveYear)))+
+  final_project_theme +
+  theme(legend.position = "none") +
+  labs(y = "", x = "Personnel Involved") +
+  scale_fill_brewer(palette = "YlOrRd")
+
+# https://forcats.tidyverse.org/reference/fct_reorder.html
+
+grid.arrange(b1, b3, b2, ncol=3)
+```
